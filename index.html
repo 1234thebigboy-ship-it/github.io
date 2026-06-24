@@ -289,7 +289,7 @@ tbody td { padding: var(--space-3) var(--space-4); vertical-align: middle; font-
 }
 .badge-ing { background: var(--color-blue-highlight); color: var(--color-blue); }
 .badge-up-bank { background: var(--color-orange-highlight); color: var(--color-orange); }
-.badge-ubank { background: var(--color-orange-highlight); color: var(--color-orange); }
+        .badge-ubank { background: var(--color-orange-highlight); color: var(--color-orange); }
 .badge-cat {
   background: var(--color-surface-offset-2);
   color: var(--color-text-muted);
@@ -439,7 +439,7 @@ tbody td { padding: var(--space-3) var(--space-4); vertical-align: middle; font-
 }
 .delete-row-btn:hover { background: var(--color-error-highlight); color: var(--color-error); }
 </style>
-<script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script>
+  <script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script>
 </head>
 <body>
 
@@ -496,8 +496,6 @@ tbody td { padding: var(--space-3) var(--space-4); vertical-align: middle; font-
       <span class="topbar-title" id="page-title">Dashboard</span>
     </div>
     <div class="topbar-actions">
-      <span id="sync-label" style="font-size:var(--text-xs);color:var(--color-text-muted);margin-right:var(--space-2)"></span>
-      <button class="btn btn-ghost" id="sync-btn">Sign in to OneDrive</button>
       <button class="btn btn-primary" id="open-add-btn">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         Add Expense
@@ -735,10 +733,12 @@ let state = {
 // Seed demo data
 (function seed(){
   state.buckets = [
-    {id:'b1', name:'Everyday', bank:'ING', budget:1200, purpose:'Day-to-day spending'},
-    {id:'b2', name:'Bills', bank:'ING', budget:800, purpose:'Recurring bills'},
-    {id:'b3', name:'Savings', bank:'UBank', budget:0, purpose:'Emergency fund'},
-    {id:'b4', name:'Spending', bank:'UBank', budget:600, purpose:'Personal spending'},
+    {id:'b1', name:'Car', bank:'Up Bank', budget:200, purpose:'Car expenses'},
+    {id:'b2', name:'Holiday', bank:'Up Bank', budget:300, purpose:'Travel and holidays'},
+    {id:'b3', name:'Emergency', bank:'Up Bank', budget:160, purpose:'Emergency fund'},
+    {id:'b4', name:'Spendings', bank:'Up Bank', budget:400, purpose:'Personal spending'},
+    {id:'b5', name:'Spendings', bank:'ING', budget:485, purpose:'Everyday ING spending'},
+    {id:'b6', name:'Mortgage', bank:'ING', budget:520, purpose:'Mortgage payments'},
   ];
   const today = new Date();
   const months = [0,1,2,3,4,5].map(i=>{ const d=new Date(today); d.setMonth(d.getMonth()-i); return d; });
@@ -830,8 +830,7 @@ document.getElementById('hamburger-btn').addEventListener('click',()=>{
 
 // ── Dashboard ──
 let chartCat=null, chartTrend=null;
-function refreshAll(){const p=document.querySelector(".page.active")?.id?.replace("page-","");if(p)navigate(p);}
-    function renderDashboard(){
+function renderDashboard(){
   const txs=state.transactions;
   const thisMonth=currentMonthTx();
   const expenses=thisMonth.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
@@ -1115,86 +1114,115 @@ renderDashboard();
 </script>
 <script>
 document.addEventListener('DOMContentLoaded', async function() {
-  const CFG = {
-    auth: { clientId: '3e53e2e7-8252-4da3-b46e-36bc2f388699', authority: 'https://login.microsoftonline.com/consumers', redirectUri: 'https://1234thebigboy-ship-it.github.io/github.io/' },
+  const msalConfig = {
+    auth: {
+      clientId: '3e53e2e7-8252-4da3-b46e-36bc2f388699',
+      authority: 'https://login.microsoftonline.com/consumers',
+      redirectUri: 'https://1234thebigboy-ship-it.github.io/github.io/'
+    },
     cache: { cacheLocation: 'localStorage', storeAuthStateInCookie: false }
   };
   const SCOPES = ['User.Read', 'Files.ReadWrite'];
-  const EP = 'https://graph.microsoft.com/v1.0/me/drive/root:/Documents/Finance/SpendTrack-transactions.csv:/content';
-  const inst = new msal.PublicClientApplication(CFG);
-  await inst.initialize();
-  await inst.handleRedirectPromise();
+  const FILE_EP = 'https://graph.microsoft.com/v1.0/me/drive/root:/Documents/Finance/SpendTrack-transactions.csv:/content';
 
-  function updateUI(on) {
+  const msalInst = new msal.PublicClientApplication(msalConfig);
+  await msalInst.initialize();
+  await msalInst.handleRedirectPromise();
+
+  function setSignedIn() {
     const btn = document.getElementById('sync-btn');
     const lbl = document.getElementById('sync-label');
-    if (on) { btn.textContent = 'Sync Now'; btn.onclick = syncNow; if(lbl) lbl.textContent = 'OneDrive ✓'; }
-    else { btn.textContent = 'Sign in to OneDrive'; btn.onclick = signIn; if(lbl) lbl.textContent = ''; }
+    if (btn) { btn.textContent = 'Sync Now'; btn.onclick = syncNow; }
+    if (lbl) lbl.textContent = 'OneDrive ✓';
+  }
+  function setSignedOut() {
+    const btn = document.getElementById('sync-btn');
+    const lbl = document.getElementById('sync-label');
+    if (btn) { btn.textContent = 'Sign in to OneDrive'; btn.onclick = doSignIn; }
+    if (lbl) lbl.textContent = '';
   }
 
   async function getToken() {
-    const accs = inst.getAllAccounts();
-    if (accs.length) {
-      try { const r = await inst.acquireTokenSilent({scopes: SCOPES, account: accs[0]}); return r.accessToken; } catch(e) {}
+    const accounts = msalInst.getAllAccounts();
+    if (accounts.length > 0) {
+      try {
+        const res = await msalInst.acquireTokenSilent({ scopes: SCOPES, account: accounts[0] });
+        return res.accessToken;
+      } catch(e) {}
     }
-    const r = await inst.acquireTokenPopup({scopes: SCOPES});
-    return r.accessToken;
+    const res = await msalInst.acquireTokenPopup({ scopes: SCOPES });
+    return res.accessToken;
   }
 
-  async function signIn() {
+  async function doSignIn() {
     try {
-      const r = await inst.acquireTokenPopup({scopes: SCOPES});
-      updateUI(true);
-      const loaded = await readCSV(r.accessToken);
-      if (loaded) refreshAll();
-    } catch(e) { alert('Sign in failed: ' + e.message); }
+      const res = await msalInst.acquireTokenPopup({ scopes: SCOPES });
+      setSignedIn();
+      const ok = await loadCSV(res.accessToken);
+      if (ok) refreshAll();
+    } catch(e) {
+      alert('Sign in failed: ' + e.message);
+    }
   }
 
-  async function readCSV(tokenOverride) {
+  async function loadCSV(tokenOverride) {
     try {
       const tk = tokenOverride || await getToken();
-      const r = await fetch(EP, {headers: {Authorization: 'Bearer ' + tk}});
+      const r = await fetch(FILE_EP, { headers: { Authorization: 'Bearer ' + tk } });
       if (!r.ok) return false;
-      const txt = await r.text();
-      const lines = txt.trim().split(/\r?\n/);
+      const text = await r.text();
+      const lines = text.trim().split(/\r?\n/);
       if (lines.length < 2) return false;
       const loaded = [];
       lines.slice(1).forEach(line => {
         const cols = []; let cur = '', inQ = false;
         for (let i = 0; i < line.length; i++) {
-          if (line[i]==='"' && !inQ) inQ = true;
-          else if (line[i]==='"' && inQ && line[i+1]==='"') { cur+='"'; i++; }
-          else if (line[i]==='"' && inQ) inQ = false;
-          else if (line[i]===',' && !inQ) { cols.push(cur); cur=''; }
-          else cur += line[i];
+          if (line[i]==='"' && !inQ) { inQ = true; }
+          else if (line[i]==='"' && inQ && line[i+1]==='"') { cur += '"'; i++; }
+          else if (line[i]==='"' && inQ) { inQ = false; }
+          else if (line[i]===',' && !inQ) { cols.push(cur); cur = ''; }
+          else { cur += line[i]; }
         }
         cols.push(cur);
         if (cols.length < 8) return;
-        loaded.push({id:cols[0],date:cols[1],desc:cols[2],category:cols[3],bucketId:cols[4],bank:cols[5],amount:parseFloat(cols[6])||0,type:cols[7],notes:cols[8]||''});
+        loaded.push({
+          id: cols[0], date: cols[1], desc: cols[2], category: cols[3],
+          bucketId: cols[4], bank: cols[5], amount: parseFloat(cols[6]) || 0,
+          type: cols[7], notes: cols[8] || ''
+        });
       });
       if (loaded.length > 0) window.state.transactions = loaded;
       return true;
-    } catch(e) { console.error(e); return false; }
+    } catch(e) { console.error('loadCSV error', e); return false; }
   }
 
-  async function writeCSV() {
+  async function saveCSV() {
     try {
       const tk = await getToken();
       const rows = [['id','date','desc','category','bucketId','bank','amount','type','notes']];
-      window.state.transactions.forEach(t => rows.push([t.id,t.date,t.desc,t.category,t.bucketId||'',t.bank,t.amount,t.type,t.notes||'']));
-      const csv = rows.map(r => r.map(v => '"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\r\n');
-      await fetch(EP, {method:'PUT', headers:{Authorization:'Bearer '+tk,'Content-Type':'text/csv'}, body:csv});
+      window.state.transactions.forEach(t => {
+        rows.push([t.id, t.date, t.desc, t.category, t.bucketId||'', t.bank, t.amount, t.type, t.notes||'']);
+      });
+      const csv = rows.map(r => r.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',')).join('\r\n');
+      await fetch(FILE_EP, {
+        method: 'PUT',
+        headers: { Authorization: 'Bearer ' + tk, 'Content-Type': 'text/csv' },
+        body: csv
+      });
       const lbl = document.getElementById('sync-label');
-      if(lbl) lbl.textContent = 'Saved ✓ ' + new Date().toLocaleTimeString('en-AU');
-    } catch(e) { console.error(e); }
+      if (lbl) lbl.textContent = 'Saved ✓ ' + new Date().toLocaleTimeString('en-AU');
+    } catch(e) { console.error('saveCSV error', e); }
   }
 
   async function syncNow() {
-    const lbl = document.getElementById('sync-label'); if(lbl) lbl.textContent = 'Syncing…';
-    await writeCSV(); refreshAll();
+    const lbl = document.getElementById('sync-label');
+    if (lbl) lbl.textContent = 'Syncing…';
+    await saveCSV();
+    refreshAll();
   }
 
-  window.writeAllTransactionsToWorkbook = writeCSV;
+  window.writeAllTransactionsToWorkbook = saveCSV;
+
   window.updateBucketNames = function() {
     const bank = document.getElementById('bucket-bank').value;
     const sel = document.getElementById('bucket-name');
@@ -1202,18 +1230,18 @@ document.addEventListener('DOMContentLoaded', async function() {
     sel.innerHTML = opts.map(o => `<option value="${o}">${o}</option>`).join('');
   };
 
-  // Wire up sync button
-  document.getElementById('sync-btn').onclick = signIn;
+  // Wire sign in button
+  setSignedOut();
 
-  // Auto restore session
-  const accs = inst.getAllAccounts();
-  if (accs.length) {
+  // Auto-restore session if already signed in
+  const accounts = msalInst.getAllAccounts();
+  if (accounts.length > 0) {
     try {
-      const r = await inst.acquireTokenSilent({scopes: SCOPES, account: accs[0]});
-      updateUI(true);
-      const loaded = await readCSV(r.accessToken);
-      if (loaded) refreshAll();
-    } catch(e) { /* needs sign in */ }
+      const res = await msalInst.acquireTokenSilent({ scopes: SCOPES, account: accounts[0] });
+      setSignedIn();
+      const ok = await loadCSV(res.accessToken);
+      if (ok) refreshAll();
+    } catch(e) { /* silent fail, user can sign in manually */ }
   }
 });
 </script>
