@@ -288,8 +288,7 @@ tbody td { padding: var(--space-3) var(--space-4); vertical-align: middle; font-
   white-space: nowrap;
 }
 .badge-ing { background: var(--color-blue-highlight); color: var(--color-blue); }
-.badge-up-bank { background: var(--color-orange-highlight); color: var(--color-orange); }
-        .badge-ubank { background: var(--color-orange-highlight); color: var(--color-orange); }
+.badge-ubank { background: var(--color-orange-highlight); color: var(--color-orange); }
 .badge-cat {
   background: var(--color-surface-offset-2);
   color: var(--color-text-muted);
@@ -543,11 +542,7 @@ tbody td { padding: var(--space-3) var(--space-4); vertical-align: middle; font-
     </div>
     <div class="filter-bar">
       <input type="text" id="filter-search" placeholder="Search description..." />
-      <select id="filter-bank">
-        <option value="">All Banks</option>
-        <option value="Up Bank">Up Bank</option>
-        <option value="ING">ING</option>
-      </select>
+      <select id="filter-bank"><option value="">All Banks</option></select>
       <select id="filter-cat">
         <option value="">All Categories</option>
       </select>
@@ -595,9 +590,20 @@ tbody td { padding: var(--space-3) var(--space-4); vertical-align: middle; font-
   <!-- Settings Page -->
   <section class="page" id="page-settings">
     <div class="section-header"><span class="section-title">Settings</span></div>
-    <div style="display:grid;gap:var(--space-6);max-width:600px">
+    <div style="display:grid;gap:var(--space-6);max-width:680px">
       <div class="card">
-        <div class="card-header"><span class="card-title">Manage Categories</span></div>
+        <div class="card-header"><span class="card-title">Banks</span></div>
+        <div class="card-body">
+          <div style="display:flex;gap:var(--space-3);margin-bottom:var(--space-4)">
+            <input class="form-input" id="new-bank-input" placeholder="Bank name..." style="flex:1"/>
+            <input type="color" id="new-bank-color" value="#006494" style="width:44px;height:38px;border:1px solid var(--color-border);border-radius:var(--radius-md);cursor:pointer;padding:2px 4px"/>
+            <button class="btn btn-primary" id="add-bank-btn">Add</button>
+          </div>
+          <div id="bank-list"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><span class="card-title">Categories</span></div>
         <div class="card-body">
           <div style="display:flex;gap:var(--space-3);margin-bottom:var(--space-4)">
             <input class="form-input" id="new-cat-input" placeholder="New category name..." style="flex:1"/>
@@ -607,21 +613,31 @@ tbody td { padding: var(--space-3) var(--space-4); vertical-align: middle; font-
         </div>
       </div>
       <div class="card">
+        <div class="card-header">
+          <span class="card-title">Buckets</span>
+          <button class="btn btn-primary" id="open-add-bucket-btn2" style="font-size:var(--text-xs)">+ Add Bucket</button>
+        </div>
+        <div class="card-body"><div id="bucket-settings-list"></div></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><span class="card-title">Dashboard Widgets</span></div>
+        <div class="card-body">
+          <p style="font-size:var(--text-xs);color:var(--color-text-muted);margin-bottom:var(--space-4)">Toggle which widgets appear on your dashboard.</p>
+          <div id="widget-toggles" style="display:grid;gap:var(--space-3)"></div>
+        </div>
+      </div>
+      <div class="card">
         <div class="card-header"><span class="card-title">Data</span></div>
         <div class="card-body" style="display:flex;gap:var(--space-3);flex-wrap:wrap">
-          <button class="btn btn-ghost" id="import-btn">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-            Import CSV
-          </button>
+          <button class="btn btn-ghost" id="import-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> Import CSV</button>
           <input type="file" id="import-file" accept=".csv" style="display:none"/>
           <button class="btn btn-danger" id="clear-btn">Clear All Data</button>
         </div>
       </div>
     </div>
   </section>
-</div>
 
-<!-- Add Expense Modal -->
+  <!-- Add Expense Modal -->
 <div class="modal-overlay" id="modal-add" role="dialog" aria-modal="true" aria-labelledby="modal-add-title">
   <div class="modal">
     <div class="modal-header">
@@ -727,18 +743,20 @@ tbody td { padding: var(--space-3) var(--space-4); vertical-align: middle; font-
 let state = {
   transactions: [],
   buckets: [],
-  categories: ['Groceries','Rent/Mortgage','Utilities','Transport','Dining Out','Health','Entertainment','Subscriptions','Clothing','Insurance','Investment','Income','Other']
+  categories: ['Groceries','Rent/Mortgage','Utilities','Transport','Dining Out','Health','Entertainment','Subscriptions','Clothing','Insurance','Investment','Income','Other'],
+  banks: [{name:'Up Bank',color:'#da7101'},{name:'ING',color:'#006494'}],
+  widgets: {kpi:true,catChart:true,trendChart:true,recentTx:true}
 };
 
 // Seed demo data
 (function seed(){
   state.buckets = [
-    {id:'b1', name:'Car', bank:'Up Bank', budget:200, purpose:'Car expenses'},
-    {id:'b2', name:'Holiday', bank:'Up Bank', budget:300, purpose:'Travel and holidays'},
-    {id:'b3', name:'Emergency', bank:'Up Bank', budget:160, purpose:'Emergency fund'},
-    {id:'b4', name:'Spendings', bank:'Up Bank', budget:400, purpose:'Personal spending'},
-    {id:'b5', name:'Spendings', bank:'ING', budget:485, purpose:'Everyday ING spending'},
-    {id:'b6', name:'Mortgage', bank:'ING', budget:520, purpose:'Mortgage payments'},
+    {id:'b1',name:'Car',bank:'Up Bank',budget:200,purpose:'Car expenses'},
+    {id:'b2',name:'Holiday',bank:'Up Bank',budget:300,purpose:'Travel'},
+    {id:'b3',name:'Emergency',bank:'Up Bank',budget:160,purpose:'Emergency fund'},
+    {id:'b4',name:'Spendings',bank:'Up Bank',budget:400,purpose:'Personal spending'},
+    {id:'b5',name:'Spendings',bank:'ING',budget:485,purpose:'Everyday ING'},
+    {id:'b6',name:'Mortgage',bank:'ING',budget:520,purpose:'Mortgage'},
   ];
   const today = new Date();
   const months = [0,1,2,3,4,5].map(i=>{ const d=new Date(today); d.setMonth(d.getMonth()-i); return d; });
@@ -986,21 +1004,83 @@ window.deleteBucket=function(id){
 };
 
 // ── Settings ──
+function populateBankDropdowns(){
+  ['tx-bank','bucket-bank'].forEach(id=>{
+    const el=document.getElementById(id); if(!el) return;
+    const cur=el.value;
+    el.innerHTML=state.banks.map(b=>`<option value="${b.name}">${b.name}</option>`).join('');
+    if(cur) el.value=cur;
+  });
+  const fb=document.getElementById('filter-bank');
+  if(fb){
+    const cur=fb.value;
+    fb.innerHTML='<option value="">All Banks</option>'+state.banks.map(b=>`<option value="${b.name}">${b.name}</option>`).join('');
+    if(cur) fb.value=cur;
+  }
+}
 function renderSettings(){
-  document.getElementById('cat-list').innerHTML=state.categories.map(c=>`
+  // Banks
+  const bl=document.getElementById('bank-list');
+  if(bl) bl.innerHTML=state.banks.map((b,i)=>`
+    <div style="display:flex;align-items:center;gap:var(--space-3);padding:var(--space-2) 0;border-bottom:1px solid var(--color-divider)">
+      <input type="color" value="${b.color}" onchange="state.banks[${i}].color=this.value;renderSettings();renderDashboard()" style="width:32px;height:28px;border:none;background:none;cursor:pointer;padding:0"/>
+      <span style="flex:1;font-size:var(--text-sm);font-weight:500">${b.name}</span>
+      <button class="delete-row-btn" onclick="deleteBank(${i})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg></button>
+    </div>`).join('');
+  // Categories
+  const cl=document.getElementById('cat-list');
+  if(cl) cl.innerHTML=state.categories.map(c=>`
     <div style="display:flex;align-items:center;justify-content:space-between;padding:var(--space-2) 0;border-bottom:1px solid var(--color-divider)">
       <span style="font-size:var(--text-sm)">${c}</span>
-      <button class="delete-row-btn" onclick="deleteCat('${c}')" aria-label="Delete category">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
-      </button>
-    </div>
-  `).join('');
+      <button class="delete-row-btn" onclick="deleteCat('${c}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg></button>
+    </div>`).join('');
+  // Buckets
+  const bsl=document.getElementById('bucket-settings-list');
+  if(bsl) bsl.innerHTML=state.buckets.length===0
+    ? '<p style="color:var(--color-text-muted);font-size:var(--text-sm)">No buckets yet.</p>'
+    : state.buckets.map(b=>`
+    <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:var(--space-3);align-items:center;padding:var(--space-3) 0;border-bottom:1px solid var(--color-divider)">
+      <input class="form-input" value="${b.name}" onchange="updateBucket('${b.id}','name',this.value)" style="font-size:var(--text-sm)"/>
+      <div style="display:flex;gap:var(--space-2)">
+        <select class="form-select" onchange="updateBucket('${b.id}','bank',this.value)" style="font-size:var(--text-xs);flex:1">
+          ${state.banks.map(bk=>`<option value="${bk.name}"${bk.name===b.bank?' selected':''}>${bk.name}</option>`).join('')}
+        </select>
+        <input class="form-input" type="number" value="${b.budget}" placeholder="Budget" onchange="updateBucket('${b.id}','budget',parseFloat(this.value)||0)" style="font-size:var(--text-xs);width:80px"/>
+      </div>
+      <button class="delete-row-btn" onclick="deleteBucket('${b.id}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg></button>
+    </div>`).join('');
+  // Widget toggles
+  const wt=document.getElementById('widget-toggles');
+  if(wt){
+    const labels={kpi:'KPI Summary Cards',catChart:'Spending by Category Chart',trendChart:'Monthly Trend Chart',recentTx:'Recent Transactions'};
+    wt.innerHTML=Object.entries(state.widgets).map(([k,v])=>`
+      <label style="display:flex;align-items:center;gap:var(--space-3);cursor:pointer;font-size:var(--text-sm)">
+        <input type="checkbox" ${v?'checked':''} onchange="state.widgets['${k}']=this.checked;renderDashboard()" style="width:16px;height:16px;accent-color:var(--color-primary)"/>
+        ${labels[k]}
+      </label>`).join('');
+  }
+  populateBankDropdowns();
 }
-window.deleteCat=function(c){ state.categories=state.categories.filter(x=>x!==c); renderSettings(); };
+window.updateBucket=function(id,field,val){
+  const b=state.buckets.find(x=>x.id===id);
+  if(b){b[field]=val;renderSettings();renderBuckets();}
+};
+window.deleteBank=function(i){state.banks.splice(i,1);renderSettings();renderDashboard();};
+window.deleteCat=function(c){state.categories=state.categories.filter(x=>x!==c);renderSettings();};
+document.getElementById('add-bank-btn').addEventListener('click',()=>{
+  const v=document.getElementById('new-bank-input').value.trim();
+  const col=document.getElementById('new-bank-color').value;
+  if(v&&!state.banks.find(b=>b.name===v)){state.banks.push({name:v,color:col});document.getElementById('new-bank-input').value='';renderSettings();}
+});
 document.getElementById('add-cat-btn').addEventListener('click',()=>{
   const v=document.getElementById('new-cat-input').value.trim();
-  if(v&&!state.categories.includes(v)){ state.categories.push(v); document.getElementById('new-cat-input').value=''; renderSettings(); }
+  if(v&&!state.categories.includes(v)){state.categories.push(v);document.getElementById('new-cat-input').value='';renderSettings();}
 });
+document.getElementById('open-add-bucket-btn2')?.addEventListener('click',()=>{
+  populateBankDropdowns();openModal('modal-bucket');document.getElementById('bucket-name').focus();
+});
+window.updateBucketNameOpts=function(){};
+
 
 // ── Add Transaction Modal ──
 function openModal(id){ document.getElementById(id).classList.add('open'); }
@@ -1113,135 +1193,69 @@ document.getElementById('clear-btn').addEventListener('click',()=>{
 renderDashboard();
 </script>
 <script>
-document.addEventListener('DOMContentLoaded', async function() {
-  const msalConfig = {
-    auth: {
-      clientId: '3e53e2e7-8252-4da3-b46e-36bc2f388699',
-      authority: 'https://login.microsoftonline.com/consumers',
-      redirectUri: 'https://1234thebigboy-ship-it.github.io/github.io/'
-    },
-    cache: { cacheLocation: 'localStorage', storeAuthStateInCookie: false }
-  };
-  const SCOPES = ['User.Read', 'Files.ReadWrite'];
-  const FILE_EP = 'https://graph.microsoft.com/v1.0/me/drive/root:/Documents/Finance/SpendTrack-transactions.csv:/content';
+document.addEventListener('DOMContentLoaded', async function(){
+  const msalCfg={auth:{clientId:'3e53e2e7-8252-4da3-b46e-36bc2f388699',authority:'https://login.microsoftonline.com/consumers',redirectUri:'https://1234thebigboy-ship-it.github.io/github.io/'},cache:{cacheLocation:'localStorage',storeAuthStateInCookie:false}};
+  const SCOPES=['User.Read','Files.ReadWrite'];
+  const inst=new msal.PublicClientApplication(msalCfg);
+  await inst.initialize();
+  await inst.handleRedirectPromise();
 
-  const msalInst = new msal.PublicClientApplication(msalConfig);
-  await msalInst.initialize();
-  await msalInst.handleRedirectPromise();
+  function setSignedIn(){const btn=document.getElementById('sync-btn'),lbl=document.getElementById('sync-label');if(btn){btn.textContent='Sync Now';btn.onclick=syncNow;}if(lbl)lbl.textContent='OneDrive ✓';}
+  function setSignedOut(){const btn=document.getElementById('sync-btn'),lbl=document.getElementById('sync-label');if(btn){btn.textContent='Sign in to OneDrive';btn.onclick=doSignIn;}if(lbl)lbl.textContent='';}
 
-  function setSignedIn() {
-    const btn = document.getElementById('sync-btn');
-    const lbl = document.getElementById('sync-label');
-    if (btn) { btn.textContent = 'Sync Now'; btn.onclick = syncNow; }
-    if (lbl) lbl.textContent = 'OneDrive ✓';
+  async function getToken(){
+    const accs=inst.getAllAccounts();
+    if(accs.length){try{const r=await inst.acquireTokenSilent({scopes:SCOPES,account:accs[0]});return r.accessToken;}catch(e){}}
+    const r=await inst.acquireTokenPopup({scopes:SCOPES});return r.accessToken;
   }
-  function setSignedOut() {
-    const btn = document.getElementById('sync-btn');
-    const lbl = document.getElementById('sync-label');
-    if (btn) { btn.textContent = 'Sign in to OneDrive'; btn.onclick = doSignIn; }
-    if (lbl) lbl.textContent = '';
+  async function doSignIn(){
+    try{const r=await inst.acquireTokenPopup({scopes:SCOPES});setSignedIn();const ok=await loadCSV(r.accessToken);if(ok)refreshAll();}
+    catch(e){alert('Sign in failed: '+e.message);}
   }
-
-  async function getToken() {
-    const accounts = msalInst.getAllAccounts();
-    if (accounts.length > 0) {
-      try {
-        const res = await msalInst.acquireTokenSilent({ scopes: SCOPES, account: accounts[0] });
-        return res.accessToken;
-      } catch(e) {}
-    }
-    const res = await msalInst.acquireTokenPopup({ scopes: SCOPES });
-    return res.accessToken;
-  }
-
-  async function doSignIn() {
-    try {
-      const res = await msalInst.acquireTokenPopup({ scopes: SCOPES });
-      setSignedIn();
-      const ok = await loadCSV(res.accessToken);
-      if (ok) refreshAll();
-    } catch(e) {
-      alert('Sign in failed: ' + e.message);
-    }
-  }
-
-  async function loadCSV(tokenOverride) {
-    try {
-      const tk = tokenOverride || await getToken();
-      const r = await fetch(FILE_EP, { headers: { Authorization: 'Bearer ' + tk } });
-      if (!r.ok) return false;
-      const text = await r.text();
-      const lines = text.trim().split(/\r?\n/);
-      if (lines.length < 2) return false;
-      const loaded = [];
-      lines.slice(1).forEach(line => {
-        const cols = []; let cur = '', inQ = false;
-        for (let i = 0; i < line.length; i++) {
-          if (line[i]==='"' && !inQ) { inQ = true; }
-          else if (line[i]==='"' && inQ && line[i+1]==='"') { cur += '"'; i++; }
-          else if (line[i]==='"' && inQ) { inQ = false; }
-          else if (line[i]===',' && !inQ) { cols.push(cur); cur = ''; }
-          else { cur += line[i]; }
+  async function loadCSV(tk){
+    try{
+      const r=await fetch('https://graph.microsoft.com/v1.0/me/drive/root:/Documents/Finance/SpendTrack-transactions.csv:/content',{headers:{Authorization:'Bearer '+tk}});
+      if(!r.ok)return false;
+      const txt=await r.text();
+      const lines=txt.trim().split(/\r?\n/);if(lines.length<2)return false;
+      const loaded=[];
+      lines.slice(1).forEach(line=>{
+        const cols=[];let cur='',inQ=false;
+        for(let i=0;i<line.length;i++){
+          if(line[i]==='"'&&!inQ)inQ=true;
+          else if(line[i]==='"'&&inQ&&line[i+1]==='"'){cur+='"';i++;}
+          else if(line[i]==='"'&&inQ)inQ=false;
+          else if(line[i]===','&&!inQ){cols.push(cur);cur='';}
+          else cur+=line[i];
         }
         cols.push(cur);
-        if (cols.length < 8) return;
-        loaded.push({
-          id: cols[0], date: cols[1], desc: cols[2], category: cols[3],
-          bucketId: cols[4], bank: cols[5], amount: parseFloat(cols[6]) || 0,
-          type: cols[7], notes: cols[8] || ''
-        });
+        if(cols.length<8)return;
+        loaded.push({id:cols[0],date:cols[1],desc:cols[2],category:cols[3],bucketId:cols[4],bank:cols[5],amount:parseFloat(cols[6])||0,type:cols[7],notes:cols[8]||''});
       });
-      if (loaded.length > 0) window.state.transactions = loaded;
+      if(loaded.length>0)window.state.transactions=loaded;
       return true;
-    } catch(e) { console.error('loadCSV error', e); return false; }
+    }catch(e){console.error(e);return false;}
   }
-
-  async function saveCSV() {
-    try {
-      const tk = await getToken();
-      const rows = [['id','date','desc','category','bucketId','bank','amount','type','notes']];
-      window.state.transactions.forEach(t => {
-        rows.push([t.id, t.date, t.desc, t.category, t.bucketId||'', t.bank, t.amount, t.type, t.notes||'']);
-      });
-      const csv = rows.map(r => r.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',')).join('\r\n');
-      await fetch(FILE_EP, {
-        method: 'PUT',
-        headers: { Authorization: 'Bearer ' + tk, 'Content-Type': 'text/csv' },
-        body: csv
-      });
-      const lbl = document.getElementById('sync-label');
-      if (lbl) lbl.textContent = 'Saved ✓ ' + new Date().toLocaleTimeString('en-AU');
-    } catch(e) { console.error('saveCSV error', e); }
+  async function saveCSV(){
+    try{
+      const tk=await getToken();
+      const rows=[['id','date','desc','category','bucketId','bank','amount','type','notes']];
+      window.state.transactions.forEach(t=>rows.push([t.id,t.date,t.desc,t.category,t.bucketId||'',t.bank,t.amount,t.type,t.notes||'']));
+      const csv=rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\r\n');
+      await fetch('https://graph.microsoft.com/v1.0/me/drive/root:/Documents/Finance/SpendTrack-transactions.csv:/content',{method:'PUT',headers:{Authorization:'Bearer '+tk,'Content-Type':'text/csv'},body:csv});
+      const lbl=document.getElementById('sync-label');
+      if(lbl)lbl.textContent='Saved ✓ '+new Date().toLocaleTimeString('en-AU');
+    }catch(e){console.error(e);}
   }
-
-  async function syncNow() {
-    const lbl = document.getElementById('sync-label');
-    if (lbl) lbl.textContent = 'Syncing…';
-    await saveCSV();
-    refreshAll();
+  async function syncNow(){
+    const lbl=document.getElementById('sync-label');if(lbl)lbl.textContent='Syncing…';
+    await saveCSV();refreshAll();
   }
-
-  window.writeAllTransactionsToWorkbook = saveCSV;
-
-  window.updateBucketNames = function() {
-    const bank = document.getElementById('bucket-bank').value;
-    const sel = document.getElementById('bucket-name');
-    const opts = bank === 'Up Bank' ? ['Car','Holiday','Emergency','Spendings'] : ['Spendings','Mortgage'];
-    sel.innerHTML = opts.map(o => `<option value="${o}">${o}</option>`).join('');
-  };
-
-  // Wire sign in button
+  window.writeAllTransactionsToWorkbook=saveCSV;
   setSignedOut();
-
-  // Auto-restore session if already signed in
-  const accounts = msalInst.getAllAccounts();
-  if (accounts.length > 0) {
-    try {
-      const res = await msalInst.acquireTokenSilent({ scopes: SCOPES, account: accounts[0] });
-      setSignedIn();
-      const ok = await loadCSV(res.accessToken);
-      if (ok) refreshAll();
-    } catch(e) { /* silent fail, user can sign in manually */ }
+  const accs=inst.getAllAccounts();
+  if(accs.length){
+    try{const r=await inst.acquireTokenSilent({scopes:SCOPES,account:accs[0]});setSignedIn();const ok=await loadCSV(r.accessToken);if(ok)refreshAll();}catch(e){}
   }
 });
 </script>
