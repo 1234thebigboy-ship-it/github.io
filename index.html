@@ -288,8 +288,8 @@ tbody td { padding: var(--space-3) var(--space-4); vertical-align: middle; font-
   white-space: nowrap;
 }
 .badge-ing { background: var(--color-blue-highlight); color: var(--color-blue); }
-.badge-ubank { background: var(--color-orange-highlight); color: var(--color-orange); }
 .badge-up-bank { background: var(--color-orange-highlight); color: var(--color-orange); }
+.badge-ubank { background: var(--color-orange-highlight); color: var(--color-orange); }
 .badge-cat {
   background: var(--color-surface-offset-2);
   color: var(--color-text-muted);
@@ -442,24 +442,6 @@ tbody td { padding: var(--space-3) var(--space-4); vertical-align: middle; font-
 <script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script>
 </head>
 <body>
-<script>
-const MSAL_CONFIG = {auth:{clientId:'3e53e2e7-8252-4da3-b46e-36bc2f388699',authority:'https://login.microsoftonline.com/consumers',redirectUri:'https://1234thebigboy-ship-it.github.io/github.io/'},cache:{cacheLocation:'localStorage',storeAuthStateInCookie:false}};
-const SCOPES = ['User.Read','Files.ReadWrite'];
-const msalInstance = new msal.PublicClientApplication(MSAL_CONFIG);
-let odToken = null;
-const msalReadyPromise = msalInstance.initialize().then(()=>msalInstance.handleRedirectPromise()).then(async(resp)=>{
-  if(resp&&resp.accessToken){odToken=resp.accessToken;updateSyncUI(true);const l=await readTransactionsFromWorkbook();if(l)refreshAll();return;}
-  const acc=msalInstance.getAllAccounts();
-  if(acc.length>0){try{const r=await msalInstance.acquireTokenSilent({scopes:SCOPES,account:acc[0]});odToken=r.accessToken;updateSyncUI(true);const l=await readTransactionsFromWorkbook();if(l)refreshAll();}catch(e){}}
-}).catch(e=>console.error('MSAL init',e));
-async function signIn(){await msalReadyPromise;try{const r=await msalInstance.acquireTokenPopup({scopes:SCOPES});odToken=r.accessToken;updateSyncUI(true);const l=await readTransactionsFromWorkbook();if(l)refreshAll();}catch(e){alert('Sign in failed: '+e.message);}}
-async function getToken(){await msalReadyPromise;const acc=msalInstance.getAllAccounts();if(acc.length>0){try{const r=await msalInstance.acquireTokenSilent({scopes:SCOPES,account:acc[0]});return r.accessToken;}catch(e){}}const r=await msalInstance.acquireTokenPopup({scopes:SCOPES});return r.accessToken;}
-function updateSyncUI(s){const btn=document.getElementById('sync-btn'),lbl=document.getElementById('sync-label');if(s){btn.textContent='Sync Now';btn.onclick=syncNow;if(lbl)lbl.textContent='OneDrive connected ✓';}else{btn.textContent='Sign in to OneDrive';btn.onclick=signIn;if(lbl)lbl.textContent='';}}
-async function writeAllTransactionsToWorkbook(){try{const token=await getToken();const rows=[['id','date','desc','category','bucketId','bank','amount','type','notes']];state.transactions.forEach(t=>rows.push([t.id,t.date,t.desc,t.category,t.bucketId||'',t.bank,t.amount,t.type,t.notes||'']));const csv=rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\r\n');await fetch('https://graph.microsoft.com/v1.0/me/drive/root:/Documents/Finance/SpendTrack-transactions.csv:/content',{method:'PUT',headers:{Authorization:'Bearer '+token,'Content-Type':'text/csv'},body:csv});const lbl=document.getElementById('sync-label');if(lbl)lbl.textContent='Saved ✓ '+new Date().toLocaleTimeString('en-AU');}catch(e){console.error(e);}}
-async function readTransactionsFromWorkbook(){try{const token=await getToken();const resp=await fetch('https://graph.microsoft.com/v1.0/me/drive/root:/Documents/Finance/SpendTrack-transactions.csv:/content',{headers:{Authorization:'Bearer '+token}});if(!resp.ok)return false;const text=await resp.text();const lines=text.trim().split(/\r?\n/);if(lines.length<2)return false;const loaded=[];lines.slice(1).forEach(line=>{const cols=[];let cur='',inQ=false;for(let i=0;i<line.length;i++){if(line[i]==='"'&&!inQ)inQ=true;else if(line[i]==='"'&&inQ&&line[i+1]==='"'){cur+='"';i++;}else if(line[i]==='"'&&inQ)inQ=false;else if(line[i]===','&&!inQ){cols.push(cur);cur='';}else cur+=line[i];}cols.push(cur);if(cols.length<8)return;loaded.push({id:cols[0],date:cols[1],desc:cols[2],category:cols[3],bucketId:cols[4],bank:cols[5],amount:parseFloat(cols[6])||0,type:cols[7],notes:cols[8]||''});}); if(loaded.length>0)state.transactions=loaded;return true;}catch(e){console.error(e);return false;}}
-async function syncNow(){const lbl=document.getElementById('sync-label');if(lbl)lbl.textContent='Syncing…';await writeAllTransactionsToWorkbook();refreshAll();}
-function updateBucketNames(){const bank=document.getElementById('bucket-bank').value;const sel=document.getElementById('bucket-name');const opts=bank==='Up Bank'?['Car','Holiday','Emergency','Spendings']:['Spendings','Mortgage'];sel.innerHTML=opts.map(o=>`<option value="${o}">${o}</option>`).join('');}
-</script>
 
 <!-- Sidebar -->
 <aside id="sidebar">
@@ -515,7 +497,7 @@ function updateBucketNames(){const bank=document.getElementById('bucket-bank').v
     </div>
     <div class="topbar-actions">
       <span id="sync-label" style="font-size:var(--text-xs);color:var(--color-text-muted);margin-right:var(--space-2)"></span>
-      <button class="btn btn-ghost" id="sync-btn" onclick="signIn()">Sign in to OneDrive</button>
+      <button class="btn btn-ghost" id="sync-btn">Sign in to OneDrive</button>
       <button class="btn btn-primary" id="open-add-btn">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         Add Expense
@@ -1131,5 +1113,98 @@ document.getElementById('clear-btn').addEventListener('click',()=>{
 // ── Init ──
 renderDashboard();
 </script>
+
+<script>
+(function(){
+  const CFG = {auth:{clientId:'3e53e2e7-8252-4da3-b46e-36bc2f388699',authority:'https://login.microsoftonline.com/consumers',redirectUri:'https://1234thebigboy-ship-it.github.io/github.io/'},cache:{cacheLocation:'localStorage',storeAuthStateInCookie:false}};
+  const SCOPES = ['User.Read','Files.ReadWrite'];
+  const EP = 'https://graph.microsoft.com/v1.0/me/drive/root:/Documents/Finance/SpendTrack-transactions.csv:/content';
+  const msal = window.msal;
+  const inst = new msal.PublicClientApplication(CFG);
+  let ready = false;
+
+  const readyP = inst.initialize().then(()=>inst.handleRedirectPromise()).then(async r=>{
+    ready = true;
+    if(r&&r.accessToken){ setToken(r.accessToken); await loadAndRefresh(); return; }
+    const accs = inst.getAllAccounts();
+    if(accs.length){
+      try{ const t=await inst.acquireTokenSilent({scopes:SCOPES,account:accs[0]}); setToken(t.accessToken); await loadAndRefresh(); }catch(e){}
+    }
+  }).catch(e=>console.error('MSAL',e));
+
+  function setToken(t){ window._odToken=t; updateUI(true); }
+  function updateUI(on){
+    const btn=document.getElementById('sync-btn'),lbl=document.getElementById('sync-label');
+    if(on){btn.textContent='Sync Now';btn.onclick=syncNow;if(lbl)lbl.textContent='OneDrive ✓';}
+    else{btn.textContent='Sign in to OneDrive';btn.onclick=signIn;if(lbl)lbl.textContent='';}
+  }
+  async function getToken(){
+    await readyP;
+    const accs=inst.getAllAccounts();
+    if(accs.length){try{const r=await inst.acquireTokenSilent({scopes:SCOPES,account:accs[0]});return r.accessToken;}catch(e){}}
+    const r=await inst.acquireTokenPopup({scopes:SCOPES});return r.accessToken;
+  }
+  async function signIn(){
+    await readyP;
+    try{const r=await inst.acquireTokenPopup({scopes:SCOPES});setToken(r.accessToken);await loadAndRefresh();}
+    catch(e){alert('Sign in failed: '+e.message);}
+  }
+  async function loadAndRefresh(){
+    const loaded=await readCSV(); if(loaded)refreshAll();
+  }
+  async function readCSV(){
+    try{
+      const tk=await getToken();
+      const r=await fetch(EP,{headers:{Authorization:'Bearer '+tk}});
+      if(!r.ok)return false;
+      const txt=await r.text();
+      const lines=txt.trim().split(/\r?\n/);
+      if(lines.length<2)return false;
+      const loaded=[];
+      lines.slice(1).forEach(line=>{
+        const cols=[];let cur='',inQ=false;
+        for(let i=0;i<line.length;i++){
+          if(line[i]==='"'&&!inQ)inQ=true;
+          else if(line[i]==='"'&&inQ&&line[i+1]==='"'){cur+='"';i++;}
+          else if(line[i]==='"'&&inQ)inQ=false;
+          else if(line[i]===','&&!inQ){cols.push(cur);cur='';}
+          else cur+=line[i];
+        }
+        cols.push(cur);
+        if(cols.length<8)return;
+        loaded.push({id:cols[0],date:cols[1],desc:cols[2],category:cols[3],bucketId:cols[4],bank:cols[5],amount:parseFloat(cols[6])||0,type:cols[7],notes:cols[8]||''});
+      });
+      if(loaded.length>0)window.state.transactions=loaded;
+      return true;
+    }catch(e){console.error(e);return false;}
+  }
+  async function writeCSV(){
+    try{
+      const tk=await getToken();
+      const rows=[['id','date','desc','category','bucketId','bank','amount','type','notes']];
+      window.state.transactions.forEach(t=>rows.push([t.id,t.date,t.desc,t.category,t.bucketId||'',t.bank,t.amount,t.type,t.notes||'']));
+      const csv=rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\r\n');
+      await fetch(EP,{method:'PUT',headers:{Authorization:'Bearer '+tk,'Content-Type':'text/csv'},body:csv});
+      const lbl=document.getElementById('sync-label');
+      if(lbl)lbl.textContent='Saved ✓ '+new Date().toLocaleTimeString('en-AU');
+    }catch(e){console.error(e);}
+  }
+  async function syncNow(){
+    const lbl=document.getElementById('sync-label');if(lbl)lbl.textContent='Syncing…';
+    await writeCSV();refreshAll();
+  }
+  window.writeAllTransactionsToWorkbook=writeCSV;
+  window.syncNow=syncNow;
+  function updateBucketNames(){
+    const bank=document.getElementById('bucket-bank').value;
+    const sel=document.getElementById('bucket-name');
+    const opts=bank==='Up Bank'?['Car','Holiday','Emergency','Spendings']:['Spendings','Mortgage'];
+    sel.innerHTML=opts.map(o=>`<option value="${o}">${o}</option>`).join('');
+  }
+  window.updateBucketNames=updateBucketNames;
+  document.getElementById('sync-btn').onclick=signIn;
+})();
+</script>
+
 </body>
 </html>
