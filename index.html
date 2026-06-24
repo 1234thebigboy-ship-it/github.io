@@ -1113,98 +1113,109 @@ document.getElementById('clear-btn').addEventListener('click',()=>{
 // ── Init ──
 renderDashboard();
 </script>
-
 <script>
-(function(){
-  const CFG = {auth:{clientId:'3e53e2e7-8252-4da3-b46e-36bc2f388699',authority:'https://login.microsoftonline.com/consumers',redirectUri:'https://1234thebigboy-ship-it.github.io/github.io/'},cache:{cacheLocation:'localStorage',storeAuthStateInCookie:false}};
-  const SCOPES = ['User.Read','Files.ReadWrite'];
+document.addEventListener('DOMContentLoaded', async function() {
+  const CFG = {
+    auth: { clientId: '3e53e2e7-8252-4da3-b46e-36bc2f388699', authority: 'https://login.microsoftonline.com/consumers', redirectUri: 'https://1234thebigboy-ship-it.github.io/github.io/' },
+    cache: { cacheLocation: 'localStorage', storeAuthStateInCookie: false }
+  };
+  const SCOPES = ['User.Read', 'Files.ReadWrite'];
   const EP = 'https://graph.microsoft.com/v1.0/me/drive/root:/Documents/Finance/SpendTrack-transactions.csv:/content';
-  const msal = window.msal;
   const inst = new msal.PublicClientApplication(CFG);
-  let ready = false;
+  await inst.initialize();
+  await inst.handleRedirectPromise();
 
-  const readyP = inst.initialize().then(()=>inst.handleRedirectPromise()).then(async r=>{
-    ready = true;
-    if(r&&r.accessToken){ setToken(r.accessToken); await loadAndRefresh(); return; }
+  function updateUI(on) {
+    const btn = document.getElementById('sync-btn');
+    const lbl = document.getElementById('sync-label');
+    if (on) { btn.textContent = 'Sync Now'; btn.onclick = syncNow; if(lbl) lbl.textContent = 'OneDrive ✓'; }
+    else { btn.textContent = 'Sign in to OneDrive'; btn.onclick = signIn; if(lbl) lbl.textContent = ''; }
+  }
+
+  async function getToken() {
     const accs = inst.getAllAccounts();
-    if(accs.length){
-      try{ const t=await inst.acquireTokenSilent({scopes:SCOPES,account:accs[0]}); setToken(t.accessToken); await loadAndRefresh(); }catch(e){}
+    if (accs.length) {
+      try { const r = await inst.acquireTokenSilent({scopes: SCOPES, account: accs[0]}); return r.accessToken; } catch(e) {}
     }
-  }).catch(e=>console.error('MSAL',e));
+    const r = await inst.acquireTokenPopup({scopes: SCOPES});
+    return r.accessToken;
+  }
 
-  function setToken(t){ window._odToken=t; updateUI(true); }
-  function updateUI(on){
-    const btn=document.getElementById('sync-btn'),lbl=document.getElementById('sync-label');
-    if(on){btn.textContent='Sync Now';btn.onclick=syncNow;if(lbl)lbl.textContent='OneDrive ✓';}
-    else{btn.textContent='Sign in to OneDrive';btn.onclick=signIn;if(lbl)lbl.textContent='';}
+  async function signIn() {
+    try {
+      const r = await inst.acquireTokenPopup({scopes: SCOPES});
+      updateUI(true);
+      const loaded = await readCSV(r.accessToken);
+      if (loaded) refreshAll();
+    } catch(e) { alert('Sign in failed: ' + e.message); }
   }
-  async function getToken(){
-    await readyP;
-    const accs=inst.getAllAccounts();
-    if(accs.length){try{const r=await inst.acquireTokenSilent({scopes:SCOPES,account:accs[0]});return r.accessToken;}catch(e){}}
-    const r=await inst.acquireTokenPopup({scopes:SCOPES});return r.accessToken;
-  }
-  async function signIn(){
-    await readyP;
-    try{const r=await inst.acquireTokenPopup({scopes:SCOPES});setToken(r.accessToken);await loadAndRefresh();}
-    catch(e){alert('Sign in failed: '+e.message);}
-  }
-  async function loadAndRefresh(){
-    const loaded=await readCSV(); if(loaded)refreshAll();
-  }
-  async function readCSV(){
-    try{
-      const tk=await getToken();
-      const r=await fetch(EP,{headers:{Authorization:'Bearer '+tk}});
-      if(!r.ok)return false;
-      const txt=await r.text();
-      const lines=txt.trim().split(/\r?\n/);
-      if(lines.length<2)return false;
-      const loaded=[];
-      lines.slice(1).forEach(line=>{
-        const cols=[];let cur='',inQ=false;
-        for(let i=0;i<line.length;i++){
-          if(line[i]==='"'&&!inQ)inQ=true;
-          else if(line[i]==='"'&&inQ&&line[i+1]==='"'){cur+='"';i++;}
-          else if(line[i]==='"'&&inQ)inQ=false;
-          else if(line[i]===','&&!inQ){cols.push(cur);cur='';}
-          else cur+=line[i];
+
+  async function readCSV(tokenOverride) {
+    try {
+      const tk = tokenOverride || await getToken();
+      const r = await fetch(EP, {headers: {Authorization: 'Bearer ' + tk}});
+      if (!r.ok) return false;
+      const txt = await r.text();
+      const lines = txt.trim().split(/\r?\n/);
+      if (lines.length < 2) return false;
+      const loaded = [];
+      lines.slice(1).forEach(line => {
+        const cols = []; let cur = '', inQ = false;
+        for (let i = 0; i < line.length; i++) {
+          if (line[i]==='"' && !inQ) inQ = true;
+          else if (line[i]==='"' && inQ && line[i+1]==='"') { cur+='"'; i++; }
+          else if (line[i]==='"' && inQ) inQ = false;
+          else if (line[i]===',' && !inQ) { cols.push(cur); cur=''; }
+          else cur += line[i];
         }
         cols.push(cur);
-        if(cols.length<8)return;
+        if (cols.length < 8) return;
         loaded.push({id:cols[0],date:cols[1],desc:cols[2],category:cols[3],bucketId:cols[4],bank:cols[5],amount:parseFloat(cols[6])||0,type:cols[7],notes:cols[8]||''});
       });
-      if(loaded.length>0)window.state.transactions=loaded;
+      if (loaded.length > 0) window.state.transactions = loaded;
       return true;
-    }catch(e){console.error(e);return false;}
+    } catch(e) { console.error(e); return false; }
   }
-  async function writeCSV(){
-    try{
-      const tk=await getToken();
-      const rows=[['id','date','desc','category','bucketId','bank','amount','type','notes']];
-      window.state.transactions.forEach(t=>rows.push([t.id,t.date,t.desc,t.category,t.bucketId||'',t.bank,t.amount,t.type,t.notes||'']));
-      const csv=rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\r\n');
-      await fetch(EP,{method:'PUT',headers:{Authorization:'Bearer '+tk,'Content-Type':'text/csv'},body:csv});
-      const lbl=document.getElementById('sync-label');
-      if(lbl)lbl.textContent='Saved ✓ '+new Date().toLocaleTimeString('en-AU');
-    }catch(e){console.error(e);}
-  }
-  async function syncNow(){
-    const lbl=document.getElementById('sync-label');if(lbl)lbl.textContent='Syncing…';
-    await writeCSV();refreshAll();
-  }
-  window.writeAllTransactionsToWorkbook=writeCSV;
-  window.syncNow=syncNow;
-  function updateBucketNames(){
-    const bank=document.getElementById('bucket-bank').value;
-    const sel=document.getElementById('bucket-name');
-    const opts=bank==='Up Bank'?['Car','Holiday','Emergency','Spendings']:['Spendings','Mortgage'];
-    sel.innerHTML=opts.map(o=>`<option value="${o}">${o}</option>`).join('');
-  }
-  window.updateBucketNames=updateBucketNames;
-  document.getElementById('sync-btn').onclick=signIn;
-})();
-</script>
 
+  async function writeCSV() {
+    try {
+      const tk = await getToken();
+      const rows = [['id','date','desc','category','bucketId','bank','amount','type','notes']];
+      window.state.transactions.forEach(t => rows.push([t.id,t.date,t.desc,t.category,t.bucketId||'',t.bank,t.amount,t.type,t.notes||'']));
+      const csv = rows.map(r => r.map(v => '"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\r\n');
+      await fetch(EP, {method:'PUT', headers:{Authorization:'Bearer '+tk,'Content-Type':'text/csv'}, body:csv});
+      const lbl = document.getElementById('sync-label');
+      if(lbl) lbl.textContent = 'Saved ✓ ' + new Date().toLocaleTimeString('en-AU');
+    } catch(e) { console.error(e); }
+  }
+
+  async function syncNow() {
+    const lbl = document.getElementById('sync-label'); if(lbl) lbl.textContent = 'Syncing…';
+    await writeCSV(); refreshAll();
+  }
+
+  window.writeAllTransactionsToWorkbook = writeCSV;
+  window.updateBucketNames = function() {
+    const bank = document.getElementById('bucket-bank').value;
+    const sel = document.getElementById('bucket-name');
+    const opts = bank === 'Up Bank' ? ['Car','Holiday','Emergency','Spendings'] : ['Spendings','Mortgage'];
+    sel.innerHTML = opts.map(o => `<option value="${o}">${o}</option>`).join('');
+  };
+
+  // Wire up sync button
+  document.getElementById('sync-btn').onclick = signIn;
+
+  // Auto restore session
+  const accs = inst.getAllAccounts();
+  if (accs.length) {
+    try {
+      const r = await inst.acquireTokenSilent({scopes: SCOPES, account: accs[0]});
+      updateUI(true);
+      const loaded = await readCSV(r.accessToken);
+      if (loaded) refreshAll();
+    } catch(e) { /* needs sign in */ }
+  }
+});
+</script>
 </body>
 </html>
