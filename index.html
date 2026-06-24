@@ -438,8 +438,133 @@ tbody td { padding: var(--space-3) var(--space-4); vertical-align: middle; font-
 }
 .delete-row-btn:hover { background: var(--color-error-highlight); color: var(--color-error); }
 </style>
+<script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script>
 </head>
 <body>
+
+<script>
+const MSAL_CONFIG = {
+  auth: {
+    clientId: '3e53e2e7-8252-4da3-b46e-36bc2f388699',
+    authority: 'https://login.microsoftonline.com/consumers',
+    redirectUri: 'https://1234thebigboy-ship-it.github.io/github.io/'
+  },
+  cache: { cacheLocation: 'localStorage', storeAuthStateInCookie: false }
+};
+const SCOPES = ['User.Read', 'Files.ReadWrite'];
+const msalInstance = new msal.PublicClientApplication(MSAL_CONFIG);
+let odToken = null;
+const FILE_ENDPOINT = 'https://graph.microsoft.com/v1.0/me/drive/root:/Documents/Finance/SpendTrack-transactions.csv:/content';
+
+async function getToken() {
+  const accounts = msalInstance.getAllAccounts();
+  if (accounts.length > 0) {
+    try {
+      const r = await msalInstance.acquireTokenSilent({ scopes: SCOPES, account: accounts[0] });
+      return r.accessToken;
+    } catch(e) {}
+  }
+  const r = await msalInstance.acquireTokenPopup({ scopes: SCOPES });
+  return r.accessToken;
+}
+
+async function signIn() {
+  try {
+    const r = await msalInstance.acquireTokenPopup({ scopes: SCOPES });
+    odToken = r.accessToken;
+    updateSyncUI(true);
+    const loaded = await readTransactionsFromWorkbook();
+    if (loaded) refreshAll();
+  } catch(e) { alert('Sign in failed: ' + e.message); }
+}
+
+async function signOut() {
+  const accounts = msalInstance.getAllAccounts();
+  if (accounts.length > 0) msalInstance.logoutPopup({ account: accounts[0] });
+  odToken = null;
+  updateSyncUI(false);
+}
+
+function updateSyncUI(signedIn) {
+  const btn = document.getElementById('sync-btn');
+  const lbl = document.getElementById('sync-label');
+  if (signedIn) {
+    btn.textContent = 'Sync Now';
+    btn.onclick = syncNow;
+    if (lbl) lbl.textContent = 'OneDrive connected ✓';
+  } else {
+    btn.textContent = 'Sign in to OneDrive';
+    btn.onclick = signIn;
+    if (lbl) lbl.textContent = '';
+  }
+}
+
+async function writeAllTransactionsToWorkbook() {
+  try {
+    const token = await getToken();
+    const rows = [['id','date','desc','category','bucketId','bank','amount','type','notes']];
+    state.transactions.forEach(t => rows.push([t.id, t.date, t.desc, t.category, t.bucketId||'', t.bank, t.amount, t.type, t.notes||'']));
+    const csv = rows.map(r => r.map(v => '"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\r\n');
+    await fetch(FILE_ENDPOINT, {
+      method: 'PUT',
+      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'text/csv' },
+      body: csv
+    });
+    const lbl = document.getElementById('sync-label');
+    if (lbl) lbl.textContent = 'Saved to OneDrive ✓ ' + new Date().toLocaleTimeString('en-AU');
+  } catch(e) { console.error('writeWorkbook', e); }
+}
+
+async function readTransactionsFromWorkbook() {
+  try {
+    const token = await getToken();
+    const resp = await fetch(FILE_ENDPOINT, { headers: { Authorization: 'Bearer ' + token } });
+    if (!resp.ok) return false;
+    const text = await resp.text();
+    const lines = text.trim().split(/\r?\n/);
+    if (lines.length < 2) return false;
+    const loaded = [];
+    lines.slice(1).forEach(line => {
+      const cols = [];
+      let cur = '', inQ = false;
+      for (let i = 0; i < line.length; i++) {
+        if (line[i] === '"' && !inQ) { inQ = true; }
+        else if (line[i] === '"' && inQ && line[i+1] === '"') { cur += '"'; i++; }
+        else if (line[i] === '"' && inQ) { inQ = false; }
+        else if (line[i] === ',' && !inQ) { cols.push(cur); cur = ''; }
+        else { cur += line[i]; }
+      }
+      cols.push(cur);
+      if (cols.length < 8) return;
+      loaded.push({ id:cols[0], date:cols[1], desc:cols[2], category:cols[3], bucketId:cols[4], bank:cols[5], amount:parseFloat(cols[6])||0, type:cols[7], notes:cols[8]||'' });
+    });
+    if (loaded.length > 0) state.transactions = loaded;
+    return true;
+  } catch(e) { console.error('readWorkbook', e); return false; }
+}
+
+async function syncNow() {
+  const lbl = document.getElementById('sync-label');
+  if (lbl) lbl.textContent = 'Syncing…';
+  await writeAllTransactionsToWorkbook();
+  refreshAll();
+}
+
+(async () => {
+  await msalInstance.initialize();
+  const accounts = msalInstance.getAllAccounts();
+  if (accounts.length > 0) {
+    try {
+      const r = await msalInstance.acquireTokenSilent({ scopes: SCOPES, account: accounts[0] });
+      odToken = r.accessToken;
+      updateSyncUI(true);
+      const loaded = await readTransactionsFromWorkbook();
+      if (loaded) refreshAll();
+    } catch(e) {}
+  }
+})();
+</script>
+
 
 <!-- Sidebar -->
 <aside id="sidebar">
@@ -494,6 +619,8 @@ tbody td { padding: var(--space-3) var(--space-4); vertical-align: middle; font-
       <span class="topbar-title" id="page-title">Dashboard</span>
     </div>
     <div class="topbar-actions">
+      <span id="sync-label" style="font-size:var(--text-xs);color:var(--color-text-muted);margin-right:var(--space-2)"></span>
+      <button class="btn btn-ghost" id="sync-btn" onclick="signIn()">Sign in to OneDrive</button>
       <button class="btn btn-primary" id="open-add-btn">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         Add Expense
@@ -826,7 +953,8 @@ document.getElementById('hamburger-btn').addEventListener('click',()=>{
 
 // ── Dashboard ──
 let chartCat=null, chartTrend=null;
-function renderDashboard(){
+function refreshAll(){ const p=document.querySelector(".page.active")?.id?.replace("page-",""); if(p) navigate(p); }
+    function renderDashboard(){
   const txs=state.transactions;
   const thisMonth=currentMonthTx();
   const expenses=thisMonth.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
